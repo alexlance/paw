@@ -49,7 +49,7 @@ function add_new_secret() {
 }
 
 if [ "${#}" -eq 0 ]; then
-  cat <<EOF
+  cat <<'EOF'
 # interactive mode
 usage: paw USER@HOST:PATH
 
@@ -57,7 +57,7 @@ usage: paw USER@HOST:PATH
 usage: echo searchstring | paw USER@HOST:PATH
 
 # populate environment vars mode
-usage: \$(echo searchstring | paw USER@HOST:PATH [VAR_ONE] [VAR_TWO] [VAR_THREE])
+usage: $(echo searchstring | paw USER@HOST:PATH [VAR_ONE] [VAR_TWO] [VAR_THREE])
 EOF
   exit 1
 fi
