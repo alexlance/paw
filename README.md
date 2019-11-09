@@ -30,3 +30,9 @@ simple password (i.e. symmetric encryption) over a time span of 20 or 40 years.*
 Whereas using asymetric encryption means storing and backing up the `~/.gnupg`
 folder securely, I fear it is going to result in some really poor security
 hygiene (encraption etc).
+
+
+How to use
+----------
+
+...
