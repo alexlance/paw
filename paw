@@ -1,6 +1,29 @@
 #!/bin/bash
 set -euo pipefail
 
+# print help if no args
+if [ "${#}" -eq 0 ]; then
+  cat <<'EOF'
+# interactive mode
+usage: paw USER@HOST:PATH
+
+# one-shot mode, dumps username, secret, additional secret, out separated by newlines
+usage: echo searchstring | paw USER@HOST:PATH
+
+# populate environment vars mode, dumps out export statements which can be evaluated
+# to obtain environment variables that are set in your local shell
+usage: $(echo searchstring | paw USER@HOST:PATH [VAR_ONE] [VAR_TWO] [VAR_THREE])
+EOF
+  exit 1
+fi
+
+# grab remote host and path where secrets are stored encrypted
+IFS=: read host path <<< "${1}"
+
+# an interactive paw session will store your passphrase locally for this many seconds (eg 43200 = 12 hours)
+session=43200
+
+
 function search_secret() {
   ssh -q -t ${host} grep -HE "${1}" ${path}/file*.asc \
     || ssh -q -t ${host} find ${path} -name "*${1}*" -printf '%p:' -exec grep Comment: {} \\\;
@@ -48,23 +71,6 @@ function add_new_secret() {
   fi
 }
 
-if [ "${#}" -eq 0 ]; then
-  cat <<'EOF'
-# interactive mode
-usage: paw USER@HOST:PATH
-
-# one-shot mode
-usage: echo searchstring | paw USER@HOST:PATH
-
-# populate environment vars mode
-usage: $(echo searchstring | paw USER@HOST:PATH [VAR_ONE] [VAR_TWO] [VAR_THREE])
-EOF
-  exit 1
-fi
-
-IFS=: read host path <<< "${1}"
-session=43200
-
 
 # Handle stdin searches
 if [[ ! -t 0 ]]; then
@@ -74,17 +80,22 @@ if [[ ! -t 0 ]]; then
   if [ "${files}" ]; then
     file=$(echo "${files}" | sort | cut -f1 -d':' | tail -1)
     cred="$(get_remote_secret "${passphrase}" "${file}")"
-
     one=$(sed "1q;d" <<< "${cred}") # username
     two=$(sed "2q;d" <<< "${cred}") # password
     thr=$(sed "3q;d" <<< "${cred}") # additional secret
 
     shift
 
+    # this mode can be used like:
+    #   IFS=$'\n' read -r -d $'\0' KEY1 KEY2 KEY3 <<< $(echo searchstring | paw host:Passwords)
+    #   export KEY1 KEY2 KEY3 # now sub-processes can access these env vars
     if [ "${#}" -eq 0 ]; then
       echo "${one}"
       echo "${two}"
       echo "${thr}"
+
+    # the modes are for when you want to populate your current environment with env vars, eg:
+    #   $(echo searchstring | paw host:Passwords KEY1 KEY2)
     elif [ "${#}" -eq 1 ]; then
       echo "export $1=${one}"
     elif [ "${#}" -eq 2 ]; then
