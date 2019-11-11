@@ -18,27 +18,27 @@ EOF
 fi
 
 # grab remote host and path where secrets are stored encrypted
-IFS=: read host path <<< "${1}"
+IFS=: read -r host path <<< "${1}"
 
 # an interactive paw session will store your passphrase locally for this many seconds (eg 43200 = 12 hours)
 session=43200
 
 
 function search_secret() {
-  ssh -q -t ${host} grep -HE "${1}" ${path}/file*.asc \
-    || ssh -q -t ${host} find ${path} -name "*${1}*" -printf '%p:' -exec grep Comment: {} \\\;
+  ssh -q -t "${host}" grep -HE "${1}" "${path}"/file*.asc \
+    || ssh -q -t "${host}" find "${path}" -name "*${1}*" -printf '%p:' -exec grep Comment: {} \\\;
 }
 
 function get_remote_secret() {
-  echo "${1}" | ssh -q -t ${host} gpg -d --batch -q --no-tty --passphrase-fd 0 -o - ${2}
+  echo "${1}" | ssh -q -t "${host}" gpg -d --batch -q --no-tty --passphrase-fd 0 -o - "${2}"
 }
 
 function get_next_filename() {
-  ssh -q -t ${host} ls -1 ${path}/file*[0-9]* 2\>/dev/null | sort | tail -1 | grep -oE '[0-9]+'
+  ssh -q -t "${host}" ls -1 "${path}"/file*[0-9]* 2\>/dev/null | sort | tail -1 | grep -oE '[0-9]+'
 }
 
 function store_remote_secret() {
-  encrypt_io "${1}" "${2}" | ssh -q -t ${host} "cat > ${path}/${3}"
+  encrypt_io "${1}" "${2}" | ssh -q -t "${host}" "cat > ${path}/${3}"
   echo "Wrote: ${3}"
 }
 
@@ -56,12 +56,13 @@ function encrypt_io() {
 }
 
 function add_new_secret() {
-  local num=$(get_next_filename)
+  local num file demo
+  num=$(get_next_filename)
   num=$(( num+1 ))
-  local file="file$(printf "%03d" ${num}).asc"
+  file="file$(printf "%03d" ${num}).asc"
   echo "Intending to create: ${host}:${path}/${file}"
-  local demo=""
-  which apg 2>&1 >/dev/null && demo=" (eg: $(apg -n1 -m 32 -x 64))"
+  demo=""
+  command -v apg >/dev/null 2>&1 && demo=" (eg: $(apg -n1 -m 32 -x 64))"
   read -r -e -p "username: " username
   if [ "${username}" ]; then
     read -r -e -p "password${demo}: " password
@@ -74,8 +75,8 @@ function add_new_secret() {
 
 # handle stdin searches
 if [[ ! -t 0 ]]; then
-  read -a query
-  [ -v passphrase ] || read -e -p "gpg passphrase: " -s passphrase < /dev/tty
+  read -r query
+  [ -v passphrase ] || read -r -e -p "gpg passphrase: " -s passphrase < /dev/tty
   files=$(search_secret "${query}")
   if [ "${files}" ]; then
     file=$(echo "${files}" | sort | cut -f1 -d':' | tail -1)
@@ -111,12 +112,12 @@ if [[ ! -t 0 ]]; then
 fi
 
 # interactive mode: retrieve an existing password
-while read -e -p "${status:-}Enter \"new\" or search for: " query; do
+while read -r -e -p "${status:-}Enter \"new\" or search for: " query; do
   if [ "${query}" == "new" ]; then
     add_new_secret
   elif [ "${query}" ]; then
     if [ $(( "$(date +%s)" - ${last_success:- 0} + 1 )) -gt ${session} ]; then
-      read -e -p "gpg passphrase: " -s passphrase
+      read -r -e -p "gpg passphrase: " -s passphrase
       echo
     fi
     files=$(search_secret "${query}")
@@ -130,7 +131,7 @@ while read -e -p "${status:-}Enter \"new\" or search for: " query; do
     fi
   fi
 
-  session_time_remaining=$(( ( ${last_success:- 0} + ${session} - $(date +%s) + 1 ) / 60 ))
+  session_time_remaining=$(( ( ${last_success:- 0} + session - $(date +%s) + 1 ) / 60 ))
   if [ ${session_time_remaining} -gt 0 ]; then
     status="[${session_time_remaining}m] "
   fi
