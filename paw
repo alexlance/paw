@@ -38,7 +38,7 @@ function get_next_filename() {
 }
 
 function store_remote_secret() {
-  encrypt_io "${1}" "${2}" | ssh -q -t "${host}" "cat > ${path}/${3}"
+  encrypt_io "${1}" "${2}" | ssh -q -t "${host}" "umask 377; cat > ${path}/${3}"
   echo "Wrote: ${3}"
 }
 
