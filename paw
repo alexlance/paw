@@ -47,21 +47,21 @@ ssh="ssh -q -t ${host}"
 
 
 function search_secret() {
-  ${ssh} grep -HE "${1}" "${path}"/* \
-    \|\| find "${path}" -name "*${1}*" -printf '%p:' -exec grep Comment: {} \\\;
+  ${ssh} grep -rHE "${1@Q}" "${path@Q}" \
+    \|\| find "${path@Q}" -name "${1@Q}" -printf '%p:' -exec grep Comment: {} \\\;
 }
 
 function get_remote_secret() {
-  echo "${1}" | ${ssh} gpg -d --batch -q --no-tty --passphrase-fd 0 -o - "${2}"
+  echo "${1}" | ${ssh} gpg -d --batch -q --no-tty --passphrase-fd 0 -o - "${2@Q}"
 }
 
 function get_next_filename() {
-  ${ssh} mkdir -p "${path}"\; ls -1 "${path}"/* | grep -oE '[0-9]+' | sort -h | tail -1
+  ${ssh} mkdir -p "${path@Q}"\; ls -1 "${path@Q}"/* | grep -oE '[0-9]+' | sort -h | tail -1
 }
 
 function store_remote_secret() {
-  if ${ssh} test ! -f "${path}/${3}"; then
-    encrypt_io "${1}" "${2}" | ${ssh} "umask 377; cat > ${path}/${3}"
+  if ${ssh} test ! -f "${path@Q}/${3}"; then
+    encrypt_io "${1}" "${2}" | ${ssh} "umask 377; cat > ${path@Q}/${3}"
     echo "Wrote: ${host}:${path}/${3}"
   else
     echo "Error: File already exists: ${host}:${path}/${3}"
@@ -99,42 +99,48 @@ function add_new_secret() {
   fi
 }
 
-
-# handle stdin searches to populate environment with vars
-if [[ ! -t 0 ]]; then
-  shift
-  read -r query
-  [ "${#}" -eq 0 ] && echo "No variable names found" > /dev/stderr && exit 1
-  [ -v passphrase ] || read -r -e -p "gpg passphrase: " -s passphrase < /dev/tty
-  files=$(search_secret "${query}")
-  if [ "${files}" ]; then
-    file=$(echo "${files}" | sort -h | cut -f1 -d':' | tail -1)
-    cred="$(get_remote_secret "${passphrase}" "${file}")"
-    [ "${#}" -ge 1 ] && printf 'export %s=%q\n' "${1}" "$(sed "1q;d" <<< "${cred}")" # username
-    [ "${#}" -ge 2 ] && printf 'export %s=%q\n' "${2}" "$(sed "2q;d" <<< "${cred}")" # password
-    [ "${#}" -ge 3 ] && printf 'export %s=%q\n' "${3}" "$(sed "3q;d" <<< "${cred}")" # other secret
-    exit 0
-  fi
-  exit 1
-fi
-
-# interactive mode
-while read -r -e -p "Enter \"new\" or search for: " query; do
-  if [ "${query}" == "new" ]; then
-    add_new_secret
-  elif [ "${query}" ]; then
+function main() {
+  local query passphrase files file cred last_success
+  # handle stdin searches to populate environment with vars
+  if [[ ! -t 0 ]]; then
+    shift
+    read -r query
+    [ "${#}" -eq 0 ] && echo "No variable names found" > /dev/stderr && exit 1
+    [ -v passphrase ] || read -r -e -p "gpg passphrase: " -s passphrase < /dev/tty
     files=$(search_secret "${query}")
     if [ "${files}" ]; then
-      file=$(echo "${files}" | sort -h | tee /dev/stderr | cut -f1 -d':' | tail -1)
-      if [ $(( "$(date +%s)" - ${last_success:- 0} + 1 )) -gt ${session} ]; then
-        read -r -e -p "gpg passphrase: " -s passphrase
-        echo
-      fi
-      cred="$(get_remote_secret "${passphrase}" "${file}")" || continue
-      last_success=$(date +%s)
-      sed "1q;d" <<< "${cred}" | xclip -loops 3 -i -selection primary -f # username
-      sed "2q;d" <<< "${cred}" | xclip -loops 3 -i -selection clipboard  # password
-      sed "3q;d" <<< "${cred}"                                           # additional secret
+      file=$(echo "${files}" | sort -h | cut -f1 -d':' | tail -1)
+      cred="$(get_remote_secret "${passphrase}" "${file}")"
+      [ "${#}" -ge 1 ] && printf 'export %s=%q\n' "${1}" "$(sed "1q;d" <<< "${cred}")" # username
+      [ "${#}" -ge 2 ] && printf 'export %s=%q\n' "${2}" "$(sed "2q;d" <<< "${cred}")" # password
+      [ "${#}" -ge 3 ] && printf 'export %s=%q\n' "${3}" "$(sed "3q;d" <<< "${cred}")" # other secret
+      exit 0
     fi
+    exit 1
+
+  # else interactive mode
+  else
+    while read -r -e -p "Enter \"new\" or search for: " query; do
+      if [ "${query}" == "new" ]; then
+        add_new_secret
+      elif [ "${query}" ]; then
+        files=$(search_secret "${query}")
+        echo "ok"
+        if [ "${files}" ]; then
+          file=$(echo "${files}" | sort -h | tee /dev/stderr | cut -f1 -d':' | tail -1)
+          if [ $(( "$(date +%s)" - ${last_success:- 0} + 1 )) -gt ${session} ]; then
+            read -r -e -p "gpg passphrase: " -s passphrase
+            echo
+          fi
+          cred="$(get_remote_secret "${passphrase}" "${file}")" || continue
+          last_success=$(date +%s)
+          sed "1q;d" <<< "${cred}" | xclip -loops 3 -i -selection primary -f # username
+          sed "2q;d" <<< "${cred}" | xclip -loops 3 -i -selection clipboard  # password
+          sed "3q;d" <<< "${cred}"                                           # additional secret
+        fi
+      fi
+    done
   fi
-done
+}
+
+main "${@}"
