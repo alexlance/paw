@@ -40,7 +40,6 @@ Symmetric vs asymetric encryption
 
 **The `paw` tool exists because I am more confident in my ability to retain a
 simple passphrase (i.e. symmetric encryption) over a time span of 50 years.
-
 Also it makes it far more likely that loved ones could retrieve my credentials
 if need be.**
 
