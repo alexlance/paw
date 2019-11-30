@@ -56,7 +56,7 @@ function get_remote_secret() {
 }
 
 function get_next_filename() {
-  ${ssh} mkdir -p "${path}"\; cd "${path}"\; ls -1 ./* | sort -h | tail -1 | grep -oE '[0-9]+'
+  ${ssh} mkdir -p "${path}"\; ls -1 "${path}"/* | grep -oE '[0-9]+' | sort -h | tail -1
 }
 
 function store_remote_secret() {
