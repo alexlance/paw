@@ -4,15 +4,34 @@ set -euo pipefail
 # print help if no args
 if [ "${#}" -eq 0 ]; then
   cat <<'EOF'
-# interactive mode
-usage: paw USER@HOST:PATH
+paw
+===
 
-# one-shot mode: dumps username, secret and additional secret out, separated by newlines
-usage: echo searchstring | paw USER@HOST:PATH
+Save and fetch usernames and passwords from a remote host, there are two modes:
 
-# environment vars mode: dumps out export statements which can be evaluated
-# to set environment variables in your local shell
-usage: $(echo searchstring | paw USER@HOST:PATH [VAR_ONE] [VAR_TWO] [VAR_THREE])
+Interactive session
+-------------------
+
+usage: paw HOST:DIR
+
+ * Perform searches or add new secrets
+ * Prompt for passphrase only once at the start of a session (default 12 hours)
+ * Puts the username into the PRIMARY paste buffer (middle click) and the password
+   into the CLIPBOARD buffer (ctrl-v), useful for web forms
+ * If apg is installed, will offer a suggested password
+
+Environment variables
+---------------------
+
+usage: eval $(echo "searchstring" | paw HOST:DIR USERNAME PASSWORD OTHERSECRET)
+
+  * Search for credentials using a search string via stdin
+  * Dumps out export variable assignment statements which can be evaluated to set
+    environment variables in your local shell
+  * Observes the environment variable "passphrase" if you want to avoid typing the
+    passphrase out (useful for scripts)
+  * E.g. one could setup AWS by using: AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+
 EOF
   exit 1
 fi
@@ -20,26 +39,33 @@ fi
 # grab remote host and path where secrets are stored encrypted
 IFS=: read -r host path <<< "${1}"
 
-# an interactive paw session will store your passphrase locally for this many seconds (eg 43200 = 12 hours)
+# an interactive paw session will store your passphrase locally for this many seconds (e.g. 43200 = 12 hours)
 session=43200
+
+# default ssh command
+ssh="ssh -q -t ${host}"
 
 
 function search_secret() {
-  ssh -q -t "${host}" grep -HE "${1}" "${path}"/file*.asc \
-    || ssh -q -t "${host}" find "${path}" -name "*${1}*" -printf '%p:' -exec grep Comment: {} \\\;
+  ${ssh} grep -HE "${1}" "${path}"/* \
+    \|\| find "${path}" -name "*${1}*" -printf '%p:' -exec grep Comment: {} \\\;
 }
 
 function get_remote_secret() {
-  echo "${1}" | ssh -q -t "${host}" gpg -d --batch -q --no-tty --passphrase-fd 0 -o - "${2}"
+  echo "${1}" | ${ssh} gpg -d --batch -q --no-tty --passphrase-fd 0 -o - "${2}"
 }
 
 function get_next_filename() {
-  ssh -q -t "${host}" ls -1 "${path}"/file*[0-9]* 2\>/dev/null | sort | tail -1 | grep -oE '[0-9]+'
+  ${ssh} mkdir -p "${path}"\; cd "${path}"\; ls -1 ./* | sort -h | tail -1 | grep -oE '[0-9]+'
 }
 
 function store_remote_secret() {
-  encrypt_io "${1}" "${2}" | ssh -q -t "${host}" "umask 377; cat > ${path}/${3}"
-  echo "Wrote: ${3}"
+  if ${ssh} test ! -f "${path}/${3}"; then
+    encrypt_io "${1}" "${2}" | ${ssh} "umask 377; cat > ${path}/${3}"
+    echo "Wrote: ${host}:${path}/${3}"
+  else
+    echo "Error: File already exists: ${host}:${path}/${3}"
+  fi
 }
 
 function encrypt_io() {
@@ -57,82 +83,58 @@ function encrypt_io() {
 
 function add_new_secret() {
   local num file demo
-  num=$(get_next_filename)
+  num=$(get_next_filename) || num=0
   num=$(( num+1 ))
-  file="file$(printf "%03d" ${num}).asc"
+  file="$(printf "%d" ${num}).asc"
   echo "Intending to create: ${host}:${path}/${file}"
   demo=""
-  command -v apg >/dev/null 2>&1 && demo=" (eg: $(apg -n1 -m 32 -x 64))"
+  command -v apg >/dev/null 2>&1 && demo=" (e.g. $(apg -n1 -m 32 -x 64))"
   read -r -e -p "username: " username
   if [ "${username}" ]; then
     read -r -e -p "password${demo}: " password
     read -r -e -p "additional secret: " private
     read -r -e -p "searchable keywords: " keywords
+    # unfortunately need to escape back-slashes
     store_remote_secret "${username//\\/\\\\}\n${password//\\/\\\\}\n${private//\\/\\\\}\n" "${keywords}" "${file}"
   fi
 }
 
 
-# handle stdin searches
+# handle stdin searches to populate environment with vars
 if [[ ! -t 0 ]]; then
+  shift
   read -r query
+  [ "${#}" -eq 0 ] && echo "No variable names found" > /dev/stderr && exit 1
   [ -v passphrase ] || read -r -e -p "gpg passphrase: " -s passphrase < /dev/tty
   files=$(search_secret "${query}")
   if [ "${files}" ]; then
-    file=$(echo "${files}" | sort | cut -f1 -d':' | tail -1)
+    file=$(echo "${files}" | sort -h | cut -f1 -d':' | tail -1)
     cred="$(get_remote_secret "${passphrase}" "${file}")"
-    one=$(sed "1q;d" <<< "${cred}") # username
-    two=$(sed "2q;d" <<< "${cred}") # password
-    thr=$(sed "3q;d" <<< "${cred}") # additional secret
-
-    shift
-
-    # complicated method to populate your current environment with vars, eg:
-    #   IFS=$'\n' read -r -d $'\0' KEY1 KEY2 KEY3 <<< $(echo searchstring | paw host:Passwords)
-    #   export KEY1 KEY2 KEY3
-    if [ "${#}" -eq 0 ]; then
-      echo "${one}"
-      echo "${two}"
-      echo "${thr}"
-
-    # simple method to populate your current environment with vars, eg:
-    #   $(echo searchstring | paw host:Passwords KEY1 KEY2)
-    elif [ "${#}" -eq 1 ]; then
-      echo "export $1=${one}"
-    elif [ "${#}" -eq 2 ]; then
-      echo "export $1=${one}"
-      echo "export $2=${two}"
-    elif [ "${#}" -eq 3 ]; then
-      echo "export $1=${one}"
-      echo "export $2=${two}"
-      echo "export $3=${thr}"
-    fi
+    [ "${#}" -ge 1 ] && printf 'export %s=%q\n' "${1}" "$(sed "1q;d" <<< "${cred}")" # username
+    [ "${#}" -ge 2 ] && printf 'export %s=%q\n' "${2}" "$(sed "2q;d" <<< "${cred}")" # password
+    [ "${#}" -ge 3 ] && printf 'export %s=%q\n' "${3}" "$(sed "3q;d" <<< "${cred}")" # other secret
+    exit 0
   fi
-  exit 0
+  exit 1
 fi
 
-# interactive mode: retrieve an existing password
-while read -r -e -p "${status:-}Enter \"new\" or search for: " query; do
+# interactive mode
+while read -r -e -p "Enter \"new\" or search for: " query; do
   if [ "${query}" == "new" ]; then
     add_new_secret
   elif [ "${query}" ]; then
-    if [ $(( "$(date +%s)" - ${last_success:- 0} + 1 )) -gt ${session} ]; then
-      read -r -e -p "gpg passphrase: " -s passphrase
-      echo
-    fi
     files=$(search_secret "${query}")
     if [ "${files}" ]; then
-      file=$(echo "${files}" | sort | tee /dev/stderr | cut -f1 -d':' | tail -1)
-      cred="$(get_remote_secret "${passphrase}" "${file}")"
-      [ "${cred}" ] && last_success=$(date +%s)
+      file=$(echo "${files}" | sort -h | tee /dev/stderr | cut -f1 -d':' | tail -1)
+      if [ $(( "$(date +%s)" - ${last_success:- 0} + 1 )) -gt ${session} ]; then
+        read -r -e -p "gpg passphrase: " -s passphrase
+        echo
+      fi
+      cred="$(get_remote_secret "${passphrase}" "${file}")" || continue
+      last_success=$(date +%s)
       sed "1q;d" <<< "${cred}" | xclip -loops 3 -i -selection primary -f # username
       sed "2q;d" <<< "${cred}" | xclip -loops 3 -i -selection clipboard  # password
       sed "3q;d" <<< "${cred}"                                           # additional secret
     fi
-  fi
-
-  session_time_remaining=$(( ( ${last_success:- 0} + session - $(date +%s) + 1 ) / 60 ))
-  if [ ${session_time_remaining} -gt 0 ]; then
-    status="[${session_time_remaining}m] "
   fi
 done
