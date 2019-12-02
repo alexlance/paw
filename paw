@@ -125,7 +125,6 @@ function main() {
         add_new_secret
       elif [ "${query}" ]; then
         files=$(search_secret "${query}")
-        echo "ok"
         if [ "${files}" ]; then
           file=$(echo "${files}" | sort -h | tee /dev/stderr | cut -f1 -d':' | tail -1)
           if [ $(( "$(date +%s)" - ${last_success:- 0} + 1 )) -gt ${session} ]; then
