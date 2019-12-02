@@ -56,7 +56,7 @@ function get_remote_secret() {
 }
 
 function get_next_filename() {
-  ${ssh} mkdir -p "${path@Q}"\; ls -1 "${path@Q}"/* | grep -oE '[0-9]+' | sort -h | tail -1
+  ${ssh} mkdir -p "${path@Q}"\; ls -1 "${path@Q}"/* | grep -oE '[0-9]+' | sort -V | tail -1
 }
 
 function store_remote_secret() {
@@ -109,7 +109,7 @@ function main() {
     [ -v passphrase ] || read -r -e -p "gpg passphrase: " -s passphrase < /dev/tty
     files=$(search_secret "${query}")
     if [ "${files}" ]; then
-      file=$(echo "${files}" | sort -h | cut -f1 -d':' | tail -1)
+      file=$(echo "${files}" | sort -V | cut -f1 -d':' | tail -1)
       cred="$(get_remote_secret "${passphrase}" "${file}")"
       [ "${#}" -ge 1 ] && printf 'export %s=%q\n' "${1}" "$(sed "1q;d" <<< "${cred}")" # username
       [ "${#}" -ge 2 ] && printf 'export %s=%q\n' "${2}" "$(sed "2q;d" <<< "${cred}")" # password
@@ -126,7 +126,7 @@ function main() {
       elif [ "${query}" ]; then
         files=$(search_secret "${query}")
         if [ "${files}" ]; then
-          file=$(echo "${files}" | sort -h | tee /dev/stderr | cut -f1 -d':' | tail -1)
+          file=$(echo "${files}" | sort -V | tee /dev/stderr | cut -f1 -d':' | tail -1)
           if [ $(( "$(date +%s)" - ${last_success:- 0} + 1 )) -gt ${session} ]; then
             read -r -e -p "gpg passphrase: " -s passphrase
             echo
