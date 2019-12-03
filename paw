@@ -43,8 +43,7 @@ IFS=: read -r host path <<< "${1}"
 session=43200
 
 # default ssh command
-ssh="ssh -q -t ${host}"
-
+ssh="ssh ${host}"
 
 function search_secret() {
   ${ssh} grep -rHE "${1@Q}" "${path@Q}" \
@@ -56,10 +55,11 @@ function get_remote_secret() {
 }
 
 function get_next_filename() {
-  ${ssh} mkdir -p "${path@Q}"\; ls -1 "${path@Q}"/* | grep -oE '[0-9]+' | sort -V | tail -1
+  ${ssh} mkdir -p "${path@Q}"\; ls -1 "${path@Q}"/ | grep -oE '[0-9]+' | sort -V | tail -1
 }
 
 function store_remote_secret() {
+  ${ssh} test -d "${path@Q}" || mkdir -p "${path@Q}"
   if ${ssh} test ! -f "${path@Q}/${3}"; then
     encrypt_io "${1}" "${2}" | ${ssh} "umask 377; cat > ${path@Q}/${3}"
     echo "Wrote: ${host}:${path}/${3}"
@@ -100,7 +100,8 @@ function add_new_secret() {
 }
 
 function main() {
-  local query passphrase files file cred last_success
+  local query passphrase files file cred last_success version
+
   # handle stdin searches to populate environment with vars
   if [[ ! -t 0 ]]; then
     shift
@@ -120,6 +121,8 @@ function main() {
 
   # else interactive mode
   else
+    version=$(${ssh} gpg --version | head -1)
+    echo "${host}: ${version}"
     while read -r -e -p "Enter \"new\" or search for: " query; do
       if [ "${query}" == "new" ]; then
         add_new_secret
@@ -131,7 +134,11 @@ function main() {
             read -r -e -p "gpg passphrase: " -s passphrase
             echo
           fi
-          cred="$(get_remote_secret "${passphrase}" "${file}")" || continue
+          cred="$(get_remote_secret "${passphrase}" "${file}")" || true
+          if [ "${cred}" = "" ]; then
+            last_success=0
+            continue;
+          fi
           last_success=$(date +%s)
           sed "1q;d" <<< "${cred}" | xclip -loops 3 -i -selection primary -f # username
           sed "2q;d" <<< "${cred}" | xclip -loops 3 -i -selection clipboard  # password
