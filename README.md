@@ -78,9 +78,11 @@ How to use
 Interactive session
 -------------------
 
-usage: paw HOST:DIR
-eg:
 ```
+    # usage
+    paw HOST:DIR
+
+    # example
     paw alex@example.com:passwords
 ```
 
@@ -93,13 +95,13 @@ eg:
 Environment variables
 ---------------------
 
-usage: eval $(echo "searchstring" | paw HOST:DIR USERNAME PASSWORD OTHERSECRET)
-
-eg:
 ```
-    # ~/.bashrc
+    # usage
+    eval $(echo "searchstring" | paw HOST:DIR USERNAME PASSWORD OTHERSECRET)
+
+    # example in ~/.bashrc
     function aws-shell {
-      eval $(echo "aws" | paw example.com:passwords AWS\_ACCESS\_KEY\_ID AWS\_SECRET\_ACCESS\_KEY)
+      eval $(echo aws | paw example.com:passwords AWS\_ACCESS\_KEY\_ID AWS\_SECRET\_ACCESS\_KEY)
     }
 ```
 
