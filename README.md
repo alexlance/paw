@@ -1,58 +1,56 @@
-paw
-===
+paw: Password Manager for Linux
+===============================
 
 Symmetric encryption over ssh
 -----------------------------
 
 Paw exists because I wanted to have a way to store my every day login
-credentials on a remote server only accessible by ssh, instead of locally on a
-laptop.
+credentials as gpg encrypted files that live on a remote server only accessible
+by ssh.
 
-I have chosen to support symmetric encryption which only requires a passphrase
-to encrypt/decrypt secrets, instead of using full blown PKI/asymetric crypto
-which requires key files and a gnupg configuration.
+Paw supports two modes: an interactive mode that lets you search and populate
+your two Linux paste buffers. And also a non-interactive mode that prints out
+`export` statements that can be evaluated to populate environment variables.
 
-From a convenience perspective, paw is designed to work with the normal Linux
-PRIMARY and CLIPBOARD buffers (using xclip). Having two buffers, the username
-gets sent to one (paste it with middle-click) and the password into the other
-(paste it with ctrl-v) this makes filling in web forms very easy.
-
-For secrets/credentials that need to exist in environment variables, paw
-supports a mode where you can dump out the secrets and assign them to variables
-in your current shell. This is useful for e.g. setting up AWS credentials via
-environment variables - whilst not leaving keys around on various systems.
+When used interactively, paw sends the username to the PRIMARY buffer (paste it
+with middle-click) and the password to the CLIPBOARD buffer (paste it with
+ctrl-v) this makes filling in web forms very easy.
 
 
 Remote network access via ssh + gpg symmetric encryption
 --------------------------------------------------------
 
-Benefits to storing secrets on remote servers:
+Why store secrets on a remote server?
 
  - Laptops can be confiscated or stolen
- - Local harddrives can die, and need to be backed up
- - Local ~/.gnupg directory needs to be backed up and protected (and the
+ - Local harddrives die, servers get redundency
+ - Local ~/.gnupg directory would need to be backed up and protected (and the
    backups protected too!)
  - Remote server access can be policed better than local devices
- - Restrict access via traditional ssh server access
- - One secrets store on a server somewhere that you specify, instead of
-   multiple secrets stored on all your devices
+ - Restrict access via normal ssh server access
+ - One secrets collection on a single server, instead of multiple secrets stored on
+   all your devices
 
 
 Symmetric vs asymetric encryption
 ---------------------------------
 
- - **Symmetric** relies on you storing a passphrase (and anyone with that
-   passphrase can decrypt your secrets)
+ - **Symmetric** relies on you storing a password (and anyone with that
+   password can decrypt your secrets)
 
  - **Asymetric** relies on you holding onto key files in ~/.gnupg, storing the
    related passphrase somewhere that unlocks those key files, and updating the
-   keys whenever they expire. Asymetric is obviously the tougher mechanism to
-   encrypt secrets. But... gnupg is such a pain in the arse to use!
+   keys whenever they expire. The keys exist as files that you need to either
+   store on various devices, or have to exist on a secure key/card that you
+   carry around with you.
+
+Asymetric is obviously the tougher mechanism to encrypt secrets. But ...
 
 **The `paw` tool exists because I am more confident in my ability to retain a
-simple passphrase (i.e. symmetric encryption) over a time span of 50 years.
+simple password (i.e. symmetric encryption) over a time span of 50 years, than
+I am at storing keys and remembering gpg commands to work with those keys.
 Also it makes it far more likely that family members could retrieve my
-credentials if need be.**
+password encrypted credentials if need be.**
 
 
 GPG encryption settings
@@ -81,8 +79,8 @@ Interactive session
 
 usage: paw HOST:DIR
 
- * Perform searches or add new secrets
- * Prompt for passphrase only once at the start of a session (default 12 hours)
+ * Perform searches or add new secrets on the remote host
+ * Prompt for password only once at the start of a session (default 12 hours)
  * Puts the username into the PRIMARY paste buffer (middle click) and the password
    into the CLIPBOARD buffer (ctrl-v), useful for web forms
  * If apg is installed, will offer a suggested password
@@ -96,6 +94,28 @@ usage: eval $(echo "searchstring" | paw HOST:DIR USERNAME PASSWORD OTHERSECRET)
   * Dumps out export variable assignment statements which can be evaluated to set
     environment variables in your local shell
   * Observes the environment variable "passphrase" if you want to avoid typing the
-    passphrase out (useful for scripts)
+    password out (useful for scripts)
   * E.g. one could setup AWS by using: AWS\_ACCESS\_KEY\_ID AWS\_SECRET\_ACCESS\_KEY
+
+
+Other info
+==========
+
+  * Secrets may not contain newlines, so this is only good for one line secrets
+
+  * The data storage format stores this information, eg:
+
+      - Username: alexlance
+      - Password: abcd1234
+      - Other secret: the security question was about mum's maiden name - I answered "bloop"
+      - Keywords: github
+
+  * When you're searching for a secret you can search by keyword (eg "github"
+    in the example above) or you can also search by the filename that the info
+    is stored in.
+
+  * The searchable keywords are stored in the gpg "comment" field. This field is
+    stored inside the encrypted file, but the comment itself is not encrypted.
+    This means we can grep through all the secrets very quickly, and only decrypt
+    the one file that we care about.
 
