@@ -15,7 +15,7 @@ Interactive session
 usage: paw HOST:DIR
 
  * Perform searches or add new secrets
- * Prompt for passphrase only once at the start of a session (default 12 hours)
+ * Prompt for password only once at the start of a session (default 12 hours)
  * Puts the username into the PRIMARY paste buffer (middle click) and the password
    into the CLIPBOARD buffer (ctrl-v), useful for web forms
  * If apg is installed, will offer a suggested password
@@ -28,8 +28,8 @@ usage: eval $(echo "searchstring" | paw HOST:DIR USERNAME PASSWORD OTHERSECRET)
   * Search for credentials using a search string via stdin
   * Dumps out export variable assignment statements which can be evaluated to set
     environment variables in your local shell
-  * Observes the environment variable "passphrase" if you want to avoid typing the
-    passphrase out (useful for scripts)
+  * Observes the environment variable "password" if you want to avoid typing the
+    password out (useful for scripts)
   * E.g. one could setup AWS by using: AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
 
 EOF
@@ -39,7 +39,7 @@ fi
 # grab remote host and path where secrets are stored encrypted
 IFS=: read -r host path <<< "${1}"
 
-# an interactive paw session will store your passphrase locally for this many seconds (e.g. 43200 = 12 hours)
+# an interactive paw session will store your password locally for this many seconds (e.g. 43200 = 12 hours)
 session=43200
 
 # default ssh command
@@ -100,18 +100,18 @@ function add_new_secret() {
 }
 
 function main() {
-  local query passphrase files file cred last_success version
+  local query password files file cred last_success version
 
   # handle stdin searches to populate environment with vars
   if [[ ! -t 0 ]]; then
     shift
     read -r query
     [ "${#}" -eq 0 ] && echo "No variable names found" > /dev/stderr && exit 1
-    [ -v passphrase ] || read -r -e -p "gpg passphrase: " -s passphrase < /dev/tty
+    [ -v password ] || read -r -e -p "gpg password: " -s password < /dev/tty
     files=$(search_secret "${query}")
     if [ "${files}" ]; then
       file=$(echo "${files}" | sort -V | cut -f1 -d':' | tail -1)
-      cred="$(get_remote_secret "${passphrase}" "${file}")"
+      cred="$(get_remote_secret "${password}" "${file}")"
       [ "${#}" -ge 1 ] && printf 'export %s=%q\n' "${1}" "$(sed "1q;d" <<< "${cred}")" # username
       [ "${#}" -ge 2 ] && printf 'export %s=%q\n' "${2}" "$(sed "2q;d" <<< "${cred}")" # password
       [ "${#}" -ge 3 ] && printf 'export %s=%q\n' "${3}" "$(sed "3q;d" <<< "${cred}")" # other secret
@@ -131,10 +131,10 @@ function main() {
         if [ "${files}" ]; then
           file=$(echo "${files}" | sort -V | tee /dev/stderr | cut -f1 -d':' | tail -1)
           if [ $(( "$(date +%s)" - ${last_success:- 0} + 1 )) -gt ${session} ]; then
-            read -r -e -p "gpg passphrase: " -s passphrase
+            read -r -e -p "gpg password: " -s password
             echo
           fi
-          cred="$(get_remote_secret "${passphrase}" "${file}")" || true
+          cred="$(get_remote_secret "${password}" "${file}")" || true
           if [ "${cred}" = "" ]; then
             last_success=0
             continue;

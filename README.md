@@ -48,9 +48,10 @@ Asymetric is obviously the tougher mechanism to encrypt secrets. But ...
 
 **The `paw` tool exists because I am more confident in my ability to retain a
 simple password (i.e. symmetric encryption) over a time span of 50 years, than
-I am at storing keys and remembering gpg commands to work with those keys.
-Also it makes it far more likely that family members could retrieve my
-password encrypted credentials if need be.**
+I am at storing keys and remembering gpg commands to work with those keys.**
+
+**Also it makes it far more likely that family members could retrieve my
+password encrypted data if need be.**
 
 
 GPG encryption settings
@@ -78,6 +79,10 @@ Interactive session
 -------------------
 
 usage: paw HOST:DIR
+eg:
+```
+    paw alex@example.com:passwords
+```
 
  * Perform searches or add new secrets on the remote host
  * Prompt for password only once at the start of a session (default 12 hours)
@@ -90,12 +95,19 @@ Environment variables
 
 usage: eval $(echo "searchstring" | paw HOST:DIR USERNAME PASSWORD OTHERSECRET)
 
+eg:
+```
+    # ~/.bashrc
+    function aws-shell {
+      eval $(echo "aws" | paw example.com:passwords AWS\_ACCESS\_KEY\_ID AWS\_SECRET\_ACCESS\_KEY)
+    }
+```
+
   * Search for credentials using a search string via stdin
   * Dumps out export variable assignment statements which can be evaluated to set
     environment variables in your local shell
-  * Observes the environment variable "passphrase" if you want to avoid typing the
+  * Observes the environment variable "password" if you want to avoid typing the
     password out (useful for scripts)
-  * E.g. one could setup AWS by using: AWS\_ACCESS\_KEY\_ID AWS\_SECRET\_ACCESS\_KEY
 
 
 Other info
