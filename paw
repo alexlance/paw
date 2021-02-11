@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 # print help if no args
@@ -140,9 +140,15 @@ function main() {
             continue;
           fi
           last_success=$(date +%s)
-          sed "1q;d" <<< "${cred}" | xclip -loops 3 -i -selection primary -f # username
-          sed "2q;d" <<< "${cred}" | xclip -loops 3 -i -selection clipboard  # password
-          sed "3q;d" <<< "${cred}"                                           # additional secret
+          if [[ "$(uname)" =~ Darwin ]]; then
+            sed "1q;d" <<< "${cred}"                                           # username
+            sed "2q;d" <<< "${cred}" | pbcopy                                  # password
+            sed "3q;d" <<< "${cred}"                                           # additional secret
+          else
+            sed "1q;d" <<< "${cred}" | xclip -loops 3 -i -selection primary -f # username
+            sed "2q;d" <<< "${cred}" | xclip -loops 3 -i -selection clipboard  # password
+            sed "3q;d" <<< "${cred}"                                           # additional secret
+          fi
         fi
       fi
     done
