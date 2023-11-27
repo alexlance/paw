@@ -144,6 +144,11 @@ function main() {
             sed "1q;d" <<< "${cred}"                                           # username
             sed "2q;d" <<< "${cred}" | pbcopy                                  # password
             sed "3q;d" <<< "${cred}"                                           # additional secret
+          elif [ "$(which wl-copy)" ]; then                                    # wayland via package: wl-clipboard
+            sed "1q;d" <<< "${cred}"                                           # echo username
+            sed "1q;d" <<< "${cred}" | wl-copy -p                              # username
+            sed "2q;d" <<< "${cred}" | wl-copy                                 # password
+            sed "3q;d" <<< "${cred}"                                           # additional secret
           else
             sed "1q;d" <<< "${cred}" | xclip -loops 3 -i -selection primary -f # username
             sed "2q;d" <<< "${cred}" | xclip -loops 3 -i -selection clipboard  # password
