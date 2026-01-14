@@ -23,14 +23,15 @@ usage: paw HOST:DIR
 Environment variables
 ---------------------
 
-usage: eval $(echo "searchstring" | paw HOST:DIR USERNAME PASSWORD OTHERSECRET)
+usage:
+
+  local output="$(echo my-account | paw example.com:/path/to/passwords)"
+  export USERNAME="$(sed '1q;d' <<< ${output})"
+  export PASSWORD="$(sed '2q;d' <<< ${output})"
 
   * Search for credentials using a search string via stdin
-  * Dumps out export variable assignment statements which can be evaluated to set
-    environment variables in your local shell
-  * Observes the environment variable "password" if you want to avoid typing the
+  * Observes the environment variable "PAW_PASSWORD" if you want to avoid typing the
     password out (useful for scripts)
-  * E.g. one could setup AWS by using: AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
 
 EOF
   exit 1
@@ -106,15 +107,14 @@ function main() {
   if [[ ! -t 0 ]]; then
     shift
     read -r query
-    [ "${#}" -eq 0 ] && echo "No variable names found" > /dev/stderr && exit 1
-    [ -v password ] || read -r -e -p "gpg password: " -s password < /dev/tty
+    [ -v PAW_PASSWORD ] || read -r -e -p "gpg password: " -s PAW_PASSWORD < /dev/tty
     files=$(search_secret "${query}")
     if [ "${files}" ]; then
       file=$(echo "${files}" | sort -V | cut -f1 -d':' | tail -1)
-      cred="$(get_remote_secret "${password}" "${file}")"
-      [ "${#}" -ge 1 ] && printf 'export %s=%q\n' "${1}" "$(sed "1q;d" <<< "${cred}")" # username
-      [ "${#}" -ge 2 ] && printf 'export %s=%q\n' "${2}" "$(sed "2q;d" <<< "${cred}")" # password
-      [ "${#}" -ge 3 ] && printf 'export %s=%q\n' "${3}" "$(sed "3q;d" <<< "${cred}")" # other secret
+      cred="$(get_remote_secret "${PAW_PASSWORD}" "${file}")"
+      sed "1q;d" <<< "${cred}" # username
+      sed "2q;d" <<< "${cred}" # password
+      sed "3q;d" <<< "${cred}" # other secret
       exit 0
     fi
     exit 1

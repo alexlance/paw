@@ -10,7 +10,7 @@ by ssh.
 
 Paw supports two modes: an interactive mode that lets you search and populate
 your two Linux paste buffers. And also a non-interactive mode that prints out
-`export` statements that can be evaluated to populate environment variables.
+the secrets that can then be used to (eg) populate environment variables.
 
 When used interactively, paw sends the username to the PRIMARY buffer (paste it
 with middle-click) and the password to the CLIPBOARD buffer (paste it with
@@ -92,23 +92,22 @@ Interactive session
    into the CLIPBOARD buffer (ctrl-v), useful for web forms
  * If apg is installed, will offer a suggested password
 
-Environment variables
----------------------
+Non-interactive
+---------------
 
 ```
-    # usage
-    eval $(echo "searchstring" | paw HOST:DIR USERNAME PASSWORD OTHERSECRET)
-
     # example in ~/.bashrc
-    function aws-shell {
-      eval $(echo aws | paw example.com:passwords AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY)
+    my-aws-shell() {
+      local output="$(echo aws-account-123 | paw example.com:/path/to/passwords)"
+      export AWS_ACCESS_KEY_ID="$(sed '1q;d' <<< ${output})"
+      export AWS_SECRET_ACCESS_KEY="$(sed '2q;d' <<< ${output})"
     }
 ```
 
   * Search for credentials using a search string via stdin
-  * Dumps out export variable assignment statements which can be evaluated to set
-    environment variables in your local shell
-  * Observes the environment variable "password" if you want to avoid typing the
+  * Dumps out the username, password, and other secret, one on each line
+  * Use some sed magic to grab a particular line from the output
+  * Observes the environment variable "PAW_PASSWORD" if you want to avoid typing the
     password out (useful for scripts)
 
 
