@@ -4,17 +4,16 @@ paw: Password Manager for Linux
 Symmetric encryption over ssh
 -----------------------------
 
-Paw exists because I wanted to have a way to store my every day login
-credentials as gpg encrypted files that live on a remote server only accessible
-by ssh.
+Store everyday login credentials as GPG encrypted files on a remote server
+only accessible by ssh.
 
 Paw supports two modes: an interactive mode that lets you search and populate
-your two Linux paste buffers. And also a non-interactive mode that prints out
-the secrets that can then be used to (eg) populate environment variables.
+your paste buffer. And also a non-interactive mode that prints the secrets
+to stdout.
 
 When used interactively, paw sends the username to the PRIMARY buffer (paste it
 with middle-click) and the password to the CLIPBOARD buffer (paste it with
-ctrl-v) this makes filling in web forms very easy.
+ctrl-v) this makes it quick to fill in a username/password web form.
 
 
 Remote network access via ssh + gpg symmetric encryption
@@ -23,32 +22,32 @@ Remote network access via ssh + gpg symmetric encryption
 Why store secrets on a remote server?
 
  - Laptops can be confiscated or stolen
- - Local harddrives die, servers get redundency
+ - Harddrives fail
  - Local ~/.gnupg directory would need to be backed up and protected (and the
-   backups protected too!)
+   backups protected too)
  - Remote server access can be policed better than local devices
  - Restrict access via normal ssh server access
  - One secrets collection on a single server, instead of multiple secrets stored on
    all your devices
 
 
-Symmetric vs asymetric encryption
----------------------------------
+Symmetric vs asymmetric encryption
+----------------------------------
 
  - **Symmetric** relies on you storing a password (and anyone with that
    password can decrypt your secrets)
 
- - **Asymetric** relies on you holding onto key files in ~/.gnupg, storing the
+ - **Asymmetric** relies on you holding onto key files in ~/.gnupg, storing the
    related passphrase somewhere that unlocks those key files, and updating the
    keys whenever they expire. The keys exist as files that you need to either
    store on various devices, or have to exist on a secure key/card that you
    carry around with you.
 
-Asymetric is obviously the tougher mechanism to encrypt secrets. But ...
+Asymmetric is the tougher mechanism to encrypt secrets. But ...
 
 **The `paw` tool exists because I am more confident in my ability to retain a
-simple password (i.e. symmetric encryption) over a time span of 50 years, than
-I am at storing keys and remembering gpg commands to work with those keys.**
+simple password (i.e. symmetric encryption) over a time span of years, than
+I am at storing and working with GPG keys.**
 
 **Also it makes it far more likely that family members could retrieve my
 password encrypted data if need be.**
@@ -57,7 +56,7 @@ password encrypted data if need be.**
 GPG encryption settings
 -----------------------
 
-These appear to be the toughest settings I can find for symmetric encryption,
+These appear to be the best settings I can find for symmetric encryption,
 feel free to create an issue if you find weaknesses or better settings.
 
 ```
@@ -90,13 +89,26 @@ Interactive session
  * Prompt for password only once at the start of a session (default 12 hours)
  * Puts the username into the PRIMARY paste buffer (middle click) and the password
    into the CLIPBOARD buffer (ctrl-v), useful for web forms
- * If apg is installed, will offer a suggested password
+ * If apg is installed, it will offer a suggested password
+
 
 Non-interactive
 ---------------
 
+Paw can be used non-interactively in scripts and shell commands. Just pipe the keyword
+to search on, to stdin:
+
 ```
-    # example in ~/.bashrc
+      echo aws-account-123 | paw example.com:/path/to/passwords
+```
+
+It will prompt you for the password, but you can also set the environment variable
+PAW_PASSWORD to avoid typing it.
+
+One handy use, is to make some shell functions, eg:
+
+```
+    # ~/.bashrc
     my-aws-shell() {
       local output="$(echo aws-account-123 | paw example.com:/path/to/passwords)"
       export AWS_ACCESS_KEY_ID="$(sed '1q;d' <<< ${output})"
@@ -107,8 +119,6 @@ Non-interactive
   * Search for credentials using a search string via stdin
   * Dumps out the username, password, and other secret, one on each line
   * Use some sed magic to grab a particular line from the output
-  * Observes the environment variable "PAW_PASSWORD" if you want to avoid typing the
-    password out (useful for scripts)
 
 
 Other info
