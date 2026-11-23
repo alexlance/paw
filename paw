@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [ ! -v DISPLAY ]; then
+  # echo "Manually setting DISPLAY"
+  export DISPLAY=":0.0"
+fi
+
+
 # print help if no args
 if [ "${#}" -eq 0 ]; then
   cat <<'EOF'
@@ -40,32 +46,42 @@ fi
 # grab remote host and path where secrets are stored encrypted
 IFS=: read -r host path <<< "${1}"
 
+# allow non-remote paths, eg: paw /path/Passwords
+if [ ! "${path}" ]; then
+  path=$host
+  unset host
+fi
+
 # an interactive paw session will store your password locally for this many seconds (e.g. 43200 = 12 hours)
 session=43200
 
-# default ssh command
-ssh="ssh ${host}"
+function remote() {
+  if [ -v host ]; then
+    ssh "$host" bash -c "$(printf '%q' "$1")"
+  else
+    bash -c "$1"
+  fi
+}
 
 function search_secret() {
-  ${ssh} grep -rHE "${1@Q}" "${path@Q}" \
-    \|\| find "${path@Q}" -name "${1@Q}" -printf '%p:' -exec grep Comment: {} \\\;
+  remote "grep -rHE ${1@Q} ${path@Q} || find ${path@Q} -name ${1@Q} -printf '%p:' -exec grep Comment: {} \;"
 }
 
 function get_remote_secret() {
-  echo "${1}" | ${ssh} gpg -d --batch -q --no-tty --passphrase-fd 0 -o - "${2@Q}"
+  echo "${1}" | remote "gpg -d --batch -q --no-tty --passphrase-fd 0 -o - ${2@Q}"
 }
 
 function get_next_filename() {
-  ${ssh} mkdir -p "${path@Q}"\; ls -1 "${path@Q}"/ | grep -oE '[0-9]+' | sort -V | tail -1
+  remote "mkdir -p ${path@Q}; ls -1 ${path@Q}/ | grep -oE '[0-9]+' | sort -V | tail -1"
 }
 
 function store_remote_secret() {
-  ${ssh} test -d "${path@Q}" || mkdir -p "${path@Q}"
-  if ${ssh} test ! -f "${path@Q}/${3}"; then
-    encrypt_io "${1}" "${2}" | ${ssh} "umask 377; cat > ${path@Q}/${3}"
-    echo "Wrote: ${host}:${path}/${3}"
+  remote "test -d ${path@Q} || mkdir -p ${path@Q}"
+  if remote "test ! -f ${path@Q}/${3@Q}"; then
+    encrypt_io "${1}" "${2}" | remote "umask 377; cat > ${path@Q}/${3@Q}"
+    echo "Wrote: ${host:-localhost}:${path}/${3}"
   else
-    echo "Error: File already exists: ${host}:${path}/${3}"
+    echo "Error: File already exists: ${host:-localhost}:${path}/${3}"
   fi
 }
 
@@ -87,7 +103,7 @@ function add_new_secret() {
   num=$(get_next_filename) || num=0
   num=$(( num+1 ))
   file="$(printf "%d" ${num}).asc"
-  echo "Intending to create: ${host}:${path}/${file}"
+  echo "Intending to create: ${host:-localhost}:${path}/${file}"
   demo=""
   command -v apg >/dev/null 2>&1 && demo=" (e.g. $(apg -n1 -m 32 -x 64))"
   read -r -e -p "username: " username
@@ -121,8 +137,8 @@ function main() {
 
   # else interactive mode
   else
-    version=$(${ssh} gpg --version | head -1)
-    echo "${host}: ${version}"
+    version=$(remote "gpg --version | head -1")
+    echo "${host:-localhost}: ${version}"
     while read -r -e -p "Enter \"new\" or search for: " query; do
       if [ "${query}" == "new" ]; then
         add_new_secret
